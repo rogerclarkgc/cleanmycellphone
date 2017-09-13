@@ -29,8 +29,12 @@ class imagesimi(object):
         rb_hsv = cv2.cvtColor(self.ib, cv2.COLOR_BGR2HSV)
         ra_hsv = cv2.resize(ra_hsv, size)
         rb_hsv = cv2.resize(rb_hsv, size)
-        hista = cv2.calcHist([ra_hsv], [channel], None, [256], [0, 256])
-        histb = cv2.calcHist([rb_hsv], [channel], None, [256], [0, 256])
+        if channel == 0:
+            hista = cv2.calcHist([ra_hsv], [channel], None, [181], [0, 181])
+            histb = cv2.calcHist([rb_hsv], [channel], None, [181], [0, 181])
+        else:
+            hista = cv2.calcHist([ra_hsv], [channel], None, [256], [0, 256])
+            histb = cv2.calcHist([rb_hsv], [channel], None, [256], [0, 256])
         hista = np.array([w[0] for w in hista])
         histb = np.array([w[0] for w in histb])
         maxab = np.array([max(hista[i], histb[i]) for i in range(len(hista))])
@@ -48,13 +52,13 @@ class imagesimi(object):
         """
         diff = {'h':self.hist(channel=0),
                 's':self.hist(channel=1),
-                'v':self.hist(channel=2),}
+                'v':self.hist(channel=2)}
         return diff
 
-    def calHash(self, image=None, size=(8, 8)):
-        imr = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        imr = cv2.resize(imr, size)
-        im_cp = imr > np.mean(imr)
+    def calHash(self, image=None):
+        #imr = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        #imr = cv2.resize(imr, size)
+        im_cp = image > np.mean(image)
         im_fl = im_cp.ravel().astype(int)
         return im_fl
 
@@ -64,11 +68,38 @@ class imagesimi(object):
         return np.sum(differ)
 
 
-    def ahash(self):
-        pass
+    def ahash(self, size=(8, 8)):
 
-    def phash(self):
-        pass
+        im1 = cv2.cvtColor(self.ia, cv2.COLOR_BGR2GRAY)
+        im2 = cv2.cvtColor(self.ib, cv2.COLOR_BGR2GRAY)
+        im1 = cv2.resize(im1, size)
+        im2 = cv2.resize(im2, size)
+        a_hash = self.calHash(image=im1)
+        b_hash = self.calHash(image=im2)
+        diff_hash = self.hamming_distance(pair=(a_hash, b_hash))
+        return diff_hash
+
+    def phash(self, size=(32, 32)):
+
+        im1_re = cv2.cvtColor(self.ia, cv2.COLOR_BGR2GRAY)
+        im1_re = cv2.resize(im1_re, size, interpolation=cv2.INTER_CUBIC)
+        im2_re = cv2.cvtColor(self.ib, cv2.COLOR_BGR2GRAY)
+        im2_re = cv2.resize(im2_re, size, interpolation=cv2.INTER_CUBIC)
+
+        dct1 = cv2.dct(cv2.dct(im1_re.astype(np.float32)))
+        dct2 = cv2.dct(cv2.dct(im2_re.astype(np.float32)))
+
+        dct1_roi = dct1[:8, :8]
+        #dct1_roi = cv2.resize(dct1, (8, 8))
+        dct2_roi = dct2[:8, :8]
+        #dct2_roi = cv2.resize(dct2, (8, 8))
+
+        hash1 = self.calHash(dct1_roi)
+        hash2 = self.calHash(dct2_roi)
+
+        diff_hash = self.hamming_distance(pair=(hash1, hash2))
+        return diff_hash
+
 
     def dhash(self):
         pass
@@ -76,10 +107,8 @@ class imagesimi(object):
 
 if __name__ == '__main__':
 
-    file = ('1.png', '4.png')
+    file = ('3.jpg', '4.jpg')
     comp = imagesimi(pair=file)
     print(comp.hsvhist())
-    a_hash = comp.calHash(image=comp.ia, size=(8, 8))
-    b_hash = comp.calHash(image=comp.ib, size=(8, 8))
-    diff_hash = comp.hamming_distance(pair=(a_hash, b_hash))
-    print(a_hash, b_hash, diff_hash)
+    print(comp.ahash(size=(8, 8)))
+    print(comp.phash())
