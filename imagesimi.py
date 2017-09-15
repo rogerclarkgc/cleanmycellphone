@@ -86,8 +86,12 @@ class imagesimi(object):
         im2_re = cv2.cvtColor(self.ib, cv2.COLOR_BGR2GRAY)
         im2_re = cv2.resize(im2_re, size, interpolation=cv2.INTER_CUBIC)
 
-        dct1 = cv2.dct(cv2.dct(im1_re.astype(np.float32)))
-        dct2 = cv2.dct(cv2.dct(im2_re.astype(np.float32)))
+        #dct1 = cv2.dct(cv2.dct(im1_re.astype(np.float32)), cv2.DCT_INVERSE, flags=1)
+        #dct2 = cv2.dct(cv2.dct(im2_re.astype(np.float32)), cv2.DCT_INVERSE, flags=1)
+        dct1 = cv2.dct(im1_re.astype(np.float32))
+        dct2 = cv2.dct(im2_re.astype(np.float32))
+        cv2.imwrite('dct1.jpg', dct1)
+        cv2.imwrite('dct2.jpg', dct2)
 
         dct1_roi = dct1[:8, :8]
         #dct1_roi = cv2.resize(dct1, (8, 8))
@@ -107,8 +111,26 @@ class imagesimi(object):
 
 if __name__ == '__main__':
 
-    file = ('3.jpg', '4.jpg')
-    comp = imagesimi(pair=file)
-    print(comp.hsvhist())
-    print(comp.ahash(size=(8, 8)))
-    print(comp.phash())
+    from matplotlib import pyplot as plt
+
+    index = np.arange(0, 1, 0.05)
+    index = list(map(lambda x:'s_{}.jpg'.format(str(x)), index[1:]))
+    index.append('s_1.jpg')
+
+    comp = ['1.jpg'] * len(index)
+    pair = list(zip(comp, index))
+    print(pair)
+
+    ahash_result = [imagesimi(p).ahash() for p in pair]
+    phash_result = [imagesimi(p).phash() for p in pair]
+
+    print(ahash_result)
+    print(phash_result)
+    x = np.arange(0, 1.05, 0.05)[1:]
+    plt.plot(x, ahash_result, color='r', label='ahash')
+    plt.plot(x, phash_result, color='g', label='phash')
+    plt.xlabel("black area")
+    plt.ylabel("hamming distance")
+    plt.legend()
+    plt.show()
+
