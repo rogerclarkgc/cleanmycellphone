@@ -2,19 +2,18 @@ import cv2
 import numpy as np
 from matplotlib import pyplot as plt
 
-class imagesimi(object):
+class imagefeature(object):
     """
     use hist similarity, hash features to compare the similarity between two pictures
     """
 
-    def __init__(self, pair=None):
+    def __init__(self, img=None):
         """
         initiating the class
-        :param pair: two picture's file name, construct like (a, b)
+        :param img: two picture's file name, construct like (a, b)
         """
-        self.ia = cv2.imread(pair[0])
-        self.ib = cv2.imread(pair[1])
-        if  not (isinstance(self.ia, np.ndarray) and isinstance(self.ib, np.ndarray)):
+        self.img = cv2.imread(img)
+        if  not (isinstance(self.img, np.ndarray)):
             raise RuntimeError('no picture.')
 
 
@@ -25,35 +24,14 @@ class imagesimi(object):
         :param channel:color chanel, from 0 to 2, represent H, S, V
         :return:a value represent similarity between 0 and 1
         """
-        ra_hsv = cv2.cvtColor(self.ia, cv2.COLOR_BGR2HSV)
-        rb_hsv = cv2.cvtColor(self.ib, cv2.COLOR_BGR2HSV)
+        ra_hsv = cv2.cvtColor(self.img, cv2.COLOR_BGR2HSV)
         ra_hsv = cv2.resize(ra_hsv, size)
-        rb_hsv = cv2.resize(rb_hsv, size)
         if channel == 0:
             hista = cv2.calcHist([ra_hsv], [channel], None, [181], [0, 181])
-            histb = cv2.calcHist([rb_hsv], [channel], None, [181], [0, 181])
         else:
             hista = cv2.calcHist([ra_hsv], [channel], None, [256], [0, 256])
-            histb = cv2.calcHist([rb_hsv], [channel], None, [256], [0, 256])
         hista = np.array([w[0] for w in hista])
-        histb = np.array([w[0] for w in histb])
-        maxab = np.array([max(hista[i], histb[i]) for i in range(len(hista))])
-        try:
-            term1 = np.nan_to_num(np.abs(hista-histb)/maxab)
-        except RuntimeWarning:
-            pass
-        differ = np.mean(1-term1)
-        return differ
-
-    def hsvhist(self):
-        """
-        calculate all chanel in one time
-        :return: a dict object, contain all channels ' similarity
-        """
-        diff = {'h':self.hist(channel=0),
-                's':self.hist(channel=1),
-                'v':self.hist(channel=2)}
-        return diff
+        return hista
 
     def calHash(self, image=None):
         #imr = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -62,51 +40,106 @@ class imagesimi(object):
         im_fl = im_cp.ravel().astype(int)
         return im_fl
 
-    def hamming_distance(self, pair=None):
-
-        differ = np.abs(pair[0] - pair[1])
-        return np.sum(differ)
-
-
     def ahash(self, size=(8, 8)):
 
-        im1 = cv2.cvtColor(self.ia, cv2.COLOR_BGR2GRAY)
-        im2 = cv2.cvtColor(self.ib, cv2.COLOR_BGR2GRAY)
+        im1 = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
         im1 = cv2.resize(im1, size)
-        im2 = cv2.resize(im2, size)
-        a_hash = self.calHash(image=im1)
-        b_hash = self.calHash(image=im2)
-        diff_hash = self.hamming_distance(pair=(a_hash, b_hash))
-        return diff_hash
+        img_ahash = self.calHash(image=im1)
+        return img_ahash
 
     def phash(self, size=(32, 32)):
 
-        im1_re = cv2.cvtColor(self.ia, cv2.COLOR_BGR2GRAY)
+        im1_re = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
         im1_re = cv2.resize(im1_re, size, interpolation=cv2.INTER_CUBIC)
-        im2_re = cv2.cvtColor(self.ib, cv2.COLOR_BGR2GRAY)
-        im2_re = cv2.resize(im2_re, size, interpolation=cv2.INTER_CUBIC)
 
         #dct1 = cv2.dct(cv2.dct(im1_re.astype(np.float32)), cv2.DCT_INVERSE, flags=1)
-        #dct2 = cv2.dct(cv2.dct(im2_re.astype(np.float32)), cv2.DCT_INVERSE, flags=1)
         dct1 = cv2.dct(im1_re.astype(np.float32))
-        dct2 = cv2.dct(im2_re.astype(np.float32))
         cv2.imwrite('dct1.jpg', dct1)
-        cv2.imwrite('dct2.jpg', dct2)
-
         dct1_roi = dct1[:8, :8]
         #dct1_roi = cv2.resize(dct1, (8, 8))
-        dct2_roi = dct2[:8, :8]
-        #dct2_roi = cv2.resize(dct2, (8, 8))
 
-        hash1 = self.calHash(dct1_roi)
-        hash2 = self.calHash(dct2_roi)
-
-        diff_hash = self.hamming_distance(pair=(hash1, hash2))
-        return diff_hash
+        img_phash = self.calHash(dct1_roi)
+        return img_phash
 
 
-    def dhash(self):
-        pass
+    def ColorLayout(self, split=(8, 8)):
+        # split the image in m*n squads
+        rowstep_a = round(self.img.shape[0]/split[0])
+        colstep_a = round(self.img.shape[1]/split[1])
+        row_a = np.arange(0, self.img.shape[0], rowstep_a)
+        col_a = np.arange(0, self.img.shape[1], colstep_a)
+        rep_a = np.zeros(self.img.shape)
+        mat_a = np.zeros(split+(3, ))
+
+        # calculate each pictures' represent color in (m, n) split squads, use mean of RGB value
+        for ix, x in enumerate(row_a):
+            for iy, y in enumerate(col_a):
+                rep_a[x:x+rowstep_a, y:y+colstep_a] = np.mean(self.img[x:x+rowstep_a, y:y+colstep_a], axis=(0, 1))
+                try:
+                    mat_a[ix, iy] = np.mean(self.img[x:x+rowstep_a, y:y+colstep_a], axis=(0, 1))
+                except IndexError:
+                    pass
+
+        #cv2.imwrite('cloa.jpg', rep_a)
+
+        return {'mosaic':rep_a, 'small':mat_a}
+
+    def cldct(self, cl = None):
+
+        small_mat = cl['small'].astype(np.uint8)
+        mat_yuv = cv2.cvtColor(small_mat, cv2.COLOR_BGR2YCR_CB)
+        dct_y = cv2.dct(mat_yuv[:, :, 0].astype(np.float32))
+        dct_cr = cv2.dct(mat_yuv[:, :, 1].astype(np.float32))
+        dct_cb = cv2.dct(mat_yuv[:, :, 2].astype(np.float32))
+        return (dct_y, dct_cr, dct_cb)
+
+
+class imgcompare(object):
+    """
+
+    """
+    def __init__(self, featurepool=None, request=None):
+
+        self.pool = featurepool
+        self.req = request
+        self.lenreq = len(self.req)
+        self.poolnum = len(self.pool)
+
+    def hamming_distance(self, pair=None):
+        differ = np.abs(pair[0] - pair[1])
+        return np.sum(differ)
+
+    def comparehist(self):
+        compare = []
+        for index, item in enumerate(self.pool):
+            maxab = np.array([max(item[i], self.req[i]) for i in range(self.lenreq)])
+            term1 = np.nan_to_num(np.abs(item-self.req)/maxab)
+            differ = np.mean(1-term1)
+            comp = (index, differ)
+            compare.append(comp)
+
+        max_simi = max(compare, key=lambda x:x[1])
+        min_simi = min(compare, key=lambda x:x[1])
+
+        return {'all': compare,
+                'max': max_simi,
+                'min': min_simi}
+
+    def comparehash(self):
+        compare = []
+        for index, item in enumerate(self.pool):
+            diff_hash = self.hamming_distance(pair=(self.req, item))
+            comp = (index, diff_hash)
+            compare.append(comp)
+
+        max_simi = max(compare, key=lambda x:x[1])
+        min_simi = min(compare, key=lambda x:x[1])
+
+        return {'all': compare,
+                'max': max_simi,
+                'min': min_simi}
+
+
 
 
 if __name__ == '__main__':
@@ -116,21 +149,23 @@ if __name__ == '__main__':
     index = np.arange(0, 1, 0.05)
     index = list(map(lambda x:'s_{}.jpg'.format(str(x)), index[1:]))
     index.append('s_1.jpg')
+    #req = 's_0.01.jpg'
 
-    comp = ['1.jpg'] * len(index)
-    pair = list(zip(comp, index))
-    print(pair)
+    histpool = [imagefeature(image).hist() for image in index]
+    ahashpool = [imagefeature(image).ahash() for image in index]
+    phashpool = [imagefeature(image).phash() for image in index]
+    clpool = [imagefeature(image).ColorLayout() for image in index]
 
-    ahash_result = [imagesimi(p).ahash() for p in pair]
-    phash_result = [imagesimi(p).phash() for p in pair]
+    compare_hist = imgcompare(featurepool=histpool, request=histpool[0]).comparehist()
+    compare_ahash = imgcompare(featurepool=ahashpool, request=ahashpool[0]).comparehash()
+    compare_phash = imgcompare(featurepool=phashpool, request=phashpool[0]).comparehash()
 
-    print(ahash_result)
-    print(phash_result)
-    x = np.arange(0, 1.05, 0.05)[1:]
-    plt.plot(x, ahash_result, color='r', label='ahash')
-    plt.plot(x, phash_result, color='g', label='phash')
-    plt.xlabel("black area")
-    plt.ylabel("hamming distance")
-    plt.legend()
-    plt.show()
+    print(compare_hist['max'], compare_ahash['min'], compare_phash['min'])
+    #print(clpool[0])
+    #cv2.imwrite('clpool_0.jpg', clpool[0]['mosaic'])
+
+
+
+
+
 
