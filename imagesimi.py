@@ -33,7 +33,8 @@ class imagefeature(object):
         hista = np.array([w[0] for w in hista])
         return hista
 
-    def calHash(self, image=None):
+    @staticmethod
+    def calHash(image=None):
         """
         calculate hash using mean as threshold value
         :param image:the file name of image
@@ -95,6 +96,18 @@ class imagefeature(object):
 
         return {'mosaic':rep_a, 'small':cv2.resize(rep_a, split)}
 
+    def cldes(self, split=(8, 8), hash=True):
+        cl = self.ColorLayout(split)
+        dct_y, dct_cr, dct_cb = self.cldct(cl)
+        dt_y = self.zigzag(dct_y)
+        dt_cr = self.zigzag(dct_cr)
+        dt_cb = self.zigzag(dct_cb)
+        if hash:
+            dt_y = self.calHash(dt_y)
+            dt_cr = self.calHash(dt_cr)
+            dt_cb = self.calHash(dt_cb)
+        return (dt_y, dt_cr, dt_cb)
+
     @staticmethod
     def cldct(cl = None):
         """
@@ -122,7 +135,25 @@ class imagefeature(object):
             mat_yflip[:, mid] = mat[:, mid]
         else:
             pass
-        return mat_yflip
+        lrow = (shape[0]+shape[1]) - 1
+        half = lrow//2
+        diag = range(half, -half-1, -1)
+        result = np.array([])
+        for i in diag:
+            d = mat_yflip.diagonal(offset=i)
+            if half//2 == half/2:
+                if i//2 == i/2:
+                    result = np.append(result, -np.sort(-d))
+                else:
+                    result = np.append(result, np.sort(d))
+            else:
+                if i//2 == i/2:
+                    result = np.append(result, np.sort(d))
+                else:
+                    result = np.append(result, -np.sort(-d))
+        return result
+
+
 
 
 
@@ -171,6 +202,29 @@ class imgcompare(object):
                 'max': max_simi,
                 'min': min_simi}
 
+    def comparecld(self, hash=False):
+        compare = []
+        for index, item in enumerate(self.pool):
+            dt_y, dt_cr, dt_cb = item
+            if hash:
+                diff_y = self.hamming_distance((self.req, dt_y))
+                diff_cr = self.hamming_distance((self.req, dt_cr))
+                diff_cb = self.hamming_distance((self.req, dt_cb))
+            else:
+                diff_y = np.sum((self.req[0]-dt_y) ** 2)**0.5
+                diff_cr = np.sum((self.req[1]-dt_cr) ** 2)**0.5
+                diff_cb = np.sum((self.req[2]-dt_cb) ** 2)**0.5
+
+            diff_cld = (diff_y+diff_cr+diff_cb)/3
+            comp = (index, diff_cld)
+            compare.append(comp)
+
+        max_simi = max(compare, key=lambda x: x[1])
+        min_simi = min(compare, key=lambda x: x[1])
+
+        return {'all': compare,
+                'max': max_simi,
+                'min': min_simi}
 
 
 
@@ -178,27 +232,31 @@ if __name__ == '__main__':
 
     from matplotlib import pyplot as plt
 
-    index = np.arange(0, 1, 0.05)
-    index = list(map(lambda x:'s_{}.jpg'.format(str(x)), index[1:]))
+    index = np.arange(0.1, 1, 0.1)
+    index = list(map(lambda x:'s_{}.jpg'.format(str(x)), index))
     index.append('s_1.jpg')
     #req = 's_0.01.jpg'
 
-    histpool = [imagefeature(image).hist() for image in index]
-    ahashpool = [imagefeature(image).ahash() for image in index]
-    phashpool = [imagefeature(image).phash() for image in index]
-    clpool = [imagefeature(image).ColorLayout() for image in index]
+    #histpool = [imagefeature(image).hist() for image in index]
+    #ahashpool = [imagefeature(image).ahash() for image in index]
+    #phashpool = [imagefeature(image).phash() for image in index]
+    clpool = [imagefeature(image).cldes(hash=False) for image in index]
+    cl = [imagefeature(image).ColorLayout() for image in index]
+    dct = [imagefeature.cldct(c) for c in cl]
 
 
-    compare_hist = imgcompare(featurepool=histpool, request=histpool[0]).comparehist()
-    compare_ahash = imgcompare(featurepool=ahashpool, request=ahashpool[0]).comparehash()
-    compare_phash = imgcompare(featurepool=phashpool, request=phashpool[0]).comparehash()
-
+    #compare_hist = imgcompare(featurepool=histpool, request=histpool[0]).comparehist()
+    #compare_ahash = imgcompare(featurepool=ahashpool, request=ahashpool[0]).comparehash()
+    #compare_phash = imgcompare(featurepool=phashpool, request=phashpool[0]).comparehash()
+    compare_cld = imgcompare(featurepool=clpool, request=clpool[0]).comparecld(hash=False)
     #print(compare_hist['max'], compare_ahash['min'], compare_phash['min'])
     #print(clpool[0])
-
+    print(dct[1])
     #cv2.imwrite('clpool_0.jpg', clpool[0]['small'])
-    #print(clpool[0]['small'])
-
+    plt.plot(range(0, len(compare_cld['all'])), [x[1] for x in compare_cld['all']], '--')
+    plt.xlabel('different in pixel')
+    plt.ylabel('hamming distance')
+    plt.show()
 
 
 
